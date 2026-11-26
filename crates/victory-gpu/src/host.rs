@@ -2736,14 +2736,14 @@ fn touches(ranges: &[(usize, usize)], from: usize, to: usize) -> bool {
 fn join_ranges(ranges: &mut Vec<(usize, usize)>, more: impl IntoIterator<Item = (usize, usize)>) {
     ranges.extend(more.into_iter().filter(|r| r.0 < r.1));
     ranges.sort_unstable();
-    let mut out: Vec<(usize, usize)> = Vec::with_capacity(ranges.len());
-    for &(from, to) in ranges.iter() {
-        match out.last_mut() {
-            Some(last) if from <= last.1 => last.1 = last.1.max(to),
-            _ => out.push((from, to)),
+    // Merged in place: no second list each call.
+    ranges.dedup_by(|next, kept| {
+        let joins = next.0 <= kept.1;
+        if joins {
+            kept.1 = kept.1.max(next.1);
         }
-    }
-    *ranges = out;
+        joins
+    });
 }
 
 /// Whether anything is in the air.

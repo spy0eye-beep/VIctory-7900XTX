@@ -742,14 +742,15 @@ fn joined(mut ranges: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
     // (The sort that finds what is in order already: they come as a few
     // stretches of tens of thousands in order, put behind one another.)
     ranges.sort();
-    let mut out: Vec<(usize, usize)> = Vec::with_capacity(ranges.len());
-    for (from, to) in ranges {
-        match out.last_mut() {
-            Some(last) if from <= last.1 => last.1 = last.1.max(to),
-            _ => out.push((from, to)),
+    // Merged in place: the list it came in, no second one.
+    ranges.dedup_by(|next, kept| {
+        let joins = next.0 <= kept.1;
+        if joins {
+            kept.1 = kept.1.max(next.1);
         }
-    }
-    out
+        joins
+    });
+    ranges
 }
 
 /// Runs of pieces to hash again (`Host::card_before`), those that overlap
