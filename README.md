@@ -36,6 +36,22 @@ What is known to be wrong:
   pipelines (`victory warm` makes them ahead).
 - Recording a frame in the world makes the title's own watchdog end it.
 
+## Lowspec branch (16 GB laptops)
+
+This branch adds two things for laptops and PCs with little memory:
+
+- **The discrete GPU on laptops.** The host device was made on Windows' default
+  adapter, which on a laptop with two GPUs is often the integrated one. Now the first
+  hardware adapter in high-performance order is used, and its name is logged.
+- **Less of our own memory held below 24 GB of RAM** (`apps/victory/src/lowspec.rs`):
+  64 lists in flight instead of 256, 1 GB of title memory in place instead of 4,
+  256 snapshots kept instead of 1024 (128 MB instead of 256). The picture is the same;
+  each costs some speed. `VICTORY_LOWSPEC=0` keeps the defaults, `=1` uses them on any
+  PC, a switch you set yourself is never changed, and `scripts\play.ps1 -LowSpec`
+  says the same. Not measured in a game yet: the title itself still commits about
+  20 GB with the Series X profile, so on 16 GB the page file is needed; the Series S
+  profile (`--console series-s`) commits less.
+
 ## How to run it
 
 You need Windows 10/11 x64, a CPU with AVX2, a Direct3D 12 GPU with shader

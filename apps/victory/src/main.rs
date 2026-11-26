@@ -3,6 +3,7 @@
 //! Every command reads the user's own files and writes only to stdout or to
 //! the user's cache directory (outside the repository).
 
+mod lowspec;
 mod census;
 mod inspect;
 #[cfg(all(windows, feature = "diagnostics"))]
@@ -225,6 +226,14 @@ fn main() -> Result<()> {
             title_args,
         } => {
             victory_hle::runtime::set_title_args(title_args);
+            let asked = std::env::var("VICTORY_LOWSPEC").ok();
+            let physical = lowspec::physical_memory();
+            for (switch, value) in lowspec::switches(asked.as_deref(), physical, |n| std::env::var_os(n).is_some()) {
+                println!("lowspec        {switch}={value}");
+                // SAFETY: at start-up, before any thread of ours or the
+                // title's reads the environment.
+                unsafe { std::env::set_var(switch, value) };
+            }
             run::run(&exe, unimplemented, strict, execute, console)
         }
         #[cfg(all(windows, feature = "diagnostics"))]
