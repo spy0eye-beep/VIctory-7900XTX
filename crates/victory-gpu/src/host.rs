@@ -5522,7 +5522,7 @@ impl Host {
         let mut lists: Vec<Option<ID3D12CommandList>> = Vec::with_capacity(2 * runs.len());
         // Where each run's lists start in `lists`.
         let mut firsts = Vec::with_capacity(runs.len());
-        let mut batch = Batch::default();
+        let mut batch = Batch::spare();
         #[cfg(feature = "diagnostics")]
         let split = Split::begin();
         // The time a settle of flights takes inside this preparing: the
@@ -5635,6 +5635,7 @@ impl Host {
         for (shadow, at, bytes) in batch.placed.drain(..) {
             shadow.placed_copy(at, &bytes);
         }
+        batch.park();
         if let Some(check) = card.as_ref().and_then(|c| c.check.clone()) {
             lists.push(Some(check));
         }
@@ -7515,7 +7516,7 @@ struct Batch {
     index: ByCopy<usize>,
     /// Staging buffers (by address) refreshed since the last title write,
     /// or due to be.
-    textures: std::collections::HashSet<usize>,
+    textures: std::collections::HashSet<usize, std::hash::BuildHasherDefault<AddressHash>>,
     /// Those due ([`Batch::refresh_textures`]).
     due: Vec<std::sync::Arc<crate::texture::Staging>>,
     /// What copies at their place in the submission's lists put into title
@@ -7749,7 +7750,31 @@ fn wide_textures() -> bool {
     *ON.get_or_init(|| std::env::var_os("VICTORY_WIDE_TEXTURES").is_none_or(|v| v != "0") && wide_refresh())
 }
 
+/// The last submission's [`Batch`], emptied: its tables keep their room,
+/// so the next one does not grow them again from nothing (some 4,100
+/// copies a submission; building the tables anew took about as long as the
+/// lookups themselves).
+static SPARE_BATCH: std::sync::Mutex<Option<Batch>> = std::sync::Mutex::new(None);
+
 impl Batch {
+    /// An empty batch, with the room the last submission's had.
+    fn spare() -> Self {
+        SPARE_BATCH.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default()
+    }
+
+    /// Empties this batch (it holds no copy, texture or byte any more) and
+    /// keeps it for the next submission.
+    fn park(mut self) {
+        self.refreshes.clear();
+        self.index.clear();
+        self.textures.clear();
+        self.due.clear();
+        self.placed.clear();
+        self.fills.clear();
+        self.ahead.clear();
+        self.front = false;
+        *SPARE_BATCH.lock().unwrap_or_else(|e| e.into_inner()) = Some(self);
+    }
     fn add(&mut self, shadow: &std::sync::Arc<crate::shadow::Shadow>, address: usize, len: usize) {
         let end = address + len;
         let key = std::sync::Arc::as_ptr(shadow) as usize;
